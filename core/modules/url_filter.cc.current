@@ -33,6 +33,7 @@
 #include <tuple>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include <hs.h>
 #include "aho_corasick_ascii.h"
@@ -42,6 +43,9 @@
 #include "../utils/format.h"
 #include "../utils/http_parser.h"
 #include "../utils/ip.h"
+#include "../utils/ids_rule.h"
+#include "../utils/ids_log.h"
+#include "../utils/flow.h"
 
 using bess::utils::Ethernet;
 using bess::utils::Ipv4;
@@ -52,32 +56,61 @@ const uint64_t TIME_OUT_NS = 10ull * 1000 * 1000 * 1000;  // 10 seconds
 
 const Commands UrlFilter::cmds = {};
 
+/* create a map of rule ids and rules. key: rule id, entry: rule struct */
+
 static int fullScanHandler(unsigned int id, unsigned long long from,
                         unsigned long long to, unsigned int flags, void *ctx) {
+  Flow *matched_flow = static_cast<Flow *>(ctx);
+  uint64_t rule_id = (matched_flow->rule).id;
 
-    std::cout << "Pattern ID matched: " << id << std::endl;
-    return 0;
+  if (id == rule_id) {
+    //only log match if the regex id corresponds to the correct rule id
+    logRuleMatch(matched_flow);
+  }
+ 
+  return 0;
 }
 
-CommandResponse UrlFilter::Init(const bess::pb::EmptyArg &)
+CommandResponse UrlFilter::Init(const bess::pb::IDSArg &arg)
 {
+    /* Store IDS rules and extracts keywords and regex */
+    std::vector<std::string> keywords;
+    std::vector<const char *> patterns;
+    std::vector<unsigned int> rule_ids;
+
+    for (const auto &rule : arg.rules()) {
+      IDSRule new_rule = {
+          .src_ip = Ipv4Prefix(rule.src_ip()),
+          .dst_ip = Ipv4Prefix(rule.dst_ip()),
+          .src_port = be16_t(static_cast<uint16_t>(rule.src_port())),
+          .dst_port = be16_t(static_cast<uint16_t>(rule.dst_port())),
+        };
+
+        rule_ids.push_back(rule.id())
+
+        auto content = rule.content_rule();
+        patterns.push_back(content.regex());
+
+        for (const auto &keyword : content.keywords()) {
+          keywords.push_back(keyword);
+        }
+
+      rules_.push_back(new_rule);
+    }
+
     /* Aho-Corasick Initalization 
       Eventually this should take keywords associated with regex that are specified by the user
     */
-    std::string keywords[] = {"he$", "The", "dog"};
-    keyword_length = sizeof(keywords) / sizeof(keywords[0]);
-    buildMatchingMachine(keywords, keyword_length);
+    keyword_length = keywords.size();
+    buildMatchingMachine(keywords.data(), keyword_length);
 
     /* Hyperscan Initalization 
       Eventually this should take regex patterns specified by the user in the .bess configuration file
     */
-    const std::vector<const char *> patterns{"^The", "home"};
-    const std::vector<unsigned int> ids{0, 1};
-
     hs_compile_error_t *compile_err;
 
     /* compile multiple regex into database for scanning */
-    if (hs_compile_multi(patterns.data(), NULL, ids.data(), patterns.size(), HS_MODE_BLOCK, NULL, &database,
+    if (hs_compile_multi(patterns.data(), NULL, rule_ids.data(), patterns.size(), HS_MODE_BLOCK, NULL, &database,
                    &compile_err) != HS_SUCCESS) {
         hs_free_compile_error(compile_err);
         return CommandFailure(EINVAL, "error compiling regex patterns");
@@ -151,13 +184,31 @@ void UrlFilter::ProcessBatch(Context *ctx, bess::PacketBatch *batch) {
 
     // ! Create a new flow entry
     if (it == flow_cache_.end()) {
-      // Don't have a flow, or threw an aged one out.  If there's no
-      // SYN in this packet the reconstruct code will fail.  This is
-      // a common case (for any flow that got analyzed and allowed);
-      // skip a pointless emplace/erase pair for such packets.
-      if (tcp->flags & Tcp::Flag::kSyn) {
-        std::tie(it, std::ignore) = flow_cache_.emplace(
-            std::piecewise_construct, std::make_tuple(flow), std::make_tuple());
+
+      // Only create a new flow entry if the flow's headers match an existing IDS rule
+      bool flow_matches_rule = false;
+      
+      for (const auto &rule : rules_) {
+        if (rule.Match(flow.src_ip, flow.dst_ip, flow.src_port, flow.dst_port)) {
+          flow_matches_rule = true;
+
+          //associate flow with an IDS rule by filling out the rule_id field
+          flow.rule = &rule;
+        }
+      }
+
+      if (flow_matches_rule) {
+        // Don't have a flow, or threw an aged one out.  If there's no
+        // SYN in this packet the reconstruct code will fail.  This is
+        // a common case (for any flow that got analyzed and allowed);
+        // skip a pointless emplace/erase pair for such packets.
+        if (tcp->flags & Tcp::Flag::kSyn) {
+          std::tie(it, std::ignore) = flow_cache_.emplace(
+              std::piecewise_construct, std::make_tuple(flow), std::make_tuple());
+        } else {
+          EmitPacket(ctx, pkt, 0);
+          continue;
+        }
       } else {
         EmitPacket(ctx, pkt, 0);
         continue;
@@ -186,16 +237,14 @@ void UrlFilter::ProcessBatch(Context *ctx, bess::PacketBatch *batch) {
 
     if (tcp->flags & Tcp::Flag::kFin) {
       const char *buffer_data = buffer.buf();
-      unsigned int buffer_length = sizeof(buffer_data);
+      unsigned int buffer_length = strlen(buffer_data);
 
       // perform fast keyword scan, results will contain IDs if keywords were found in the payload
       std::vector<int> results = searchKeywords(keyword_length, buffer_data);
 
-      std::vector<int> regex_match_results;
-
+      // perform full scan if any keyword is matched during the fast scan
       if (!results.empty()) {
-        // perform full scan if any keyword is matched during the fast scan
-        if (hs_scan(database, buffer_data, buffer_length, 0, scratch, fullScanHandler, nullptr) != HS_SUCCESS) {
+        if (hs_scan(database, buffer_data, buffer_length, 0, scratch, fullScanHandler, static_cast<void *>(&flow)) != HS_SUCCESS) {
             hs_free_scratch(scratch);
             hs_free_database(database);
             std::cout << "scan failed" << std::endl;

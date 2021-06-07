@@ -425,6 +425,34 @@ message ACLArg {
 }
 
 /**
+ * Initialization Arg for the IDS module
+ */
+
+message IDSArg {
+  /**
+   * One IDS rule is represented by the following 6-tuple.
+   */
+  message Rule {
+    string src_ip = 1;    /// Source IP block in CIDR. Wildcard if "".
+    string dst_ip = 2;    /// Destination IP block in CIDR. Wildcard if "".
+    uint32 src_port = 3;  /// TCP/UDP source port. Wildcard if 0.
+    uint32 dst_port = 4;  /// TCP/UDP Destination port. Wildcard if 0.
+    bool established = 5; /// Not implemented
+
+    message Content {
+        repeated string keywords = 1;
+        string regex = 2;
+    }
+
+    Content content_rule = 6;
+    uint64 id = 7;
+  }
+
+  repeated Rule rules = 1; ///A list of ACL rules.
+}
+
+
+/**
  * The BPF module is an access control module that sends packets out on a particular gate based on whether they match a BPF filter.
  *
  * __Input Gates__: 1
@@ -533,6 +561,7 @@ message FlowGenArg {
   uint32 ip_dst_range = 9; /// When generating new flows, FlowGen modifies the template packet by changing the IP dst, incrementing it by at most ip_dst_range.
   uint32 port_src_range = 10; /// When generating new flows, FlowGen modifies the template packet by changing the TCP port, incrementing it by at most port_src_range.
   uint32 port_dst_range = 11; /// When generating new flows, FlowGen modifies the template packet by changing the TCP dst port, incrementing it by at most port_dst_range.
+  string modified_payload = 12;
 }
 
 /**
