@@ -430,7 +430,7 @@ message ACLArg {
 
 message IDSArg {
   /**
-   * One IDS rule is represented by the following 6-tuple.
+   * One IDS rule is represented by the following tuple.
    */
   message Rule {
     string src_ip = 1;    /// Source IP block in CIDR. Wildcard if "".
