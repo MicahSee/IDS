@@ -1,5 +1,4 @@
 // A helper class that defines a TCP flow
-#include "ids_rule.h"
 
 class alignas(16) Flow {
  public:
@@ -7,7 +6,6 @@ class alignas(16) Flow {
   be32_t dst_ip;
   be16_t src_port;
   be16_t dst_port;
-  IDSRule *rule;
   uint32_t padding;
 
   Flow() : padding(0) {}

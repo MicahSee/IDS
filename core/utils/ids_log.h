@@ -22,7 +22,9 @@ std::string getCurrentDateTime() {
     return std::string(buf);
 }
 
-void logRuleMatch(Flow matched_flow) {
+//Flow matched_flow, IDSRule matched_rule
+
+void logRuleMatch() {
    std::ofstream match_log(LOG_LOCATION, std::ios::out, std::ios::app);
 
    if (match_log.is_open()) {
@@ -30,7 +32,10 @@ void logRuleMatch(Flow matched_flow) {
        match_log << getCurrentDateTime();
 
        //log info about the flow as well as the rule message and id
-       
+       match_log << " " << "Rule 0 was matched";
+
+       match_log << "\n";
+
        match_log.close()
    }
 }

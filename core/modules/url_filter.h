@@ -122,9 +122,6 @@ class UrlFilter final : public Module {
 
   /* used by Aho-Corasick */
   int keyword_length = 0;
-
-  /* used by header match */
-  std::vector<IDSRule> rules_;
 };
 
 #endif  // BESS_MODULES_URL_FILTER_H_

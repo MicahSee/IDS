@@ -56,53 +56,69 @@ const uint64_t TIME_OUT_NS = 10ull * 1000 * 1000 * 1000;  // 10 seconds
 
 const Commands UrlFilter::cmds = {};
 
+namespace {
+  std::map<unsigned int, IDSRule> ids_rules;
+}
+
 /* create a map of rule ids and rules. key: rule id, entry: rule struct */
 
 static int fullScanHandler(unsigned int id, unsigned long long from,
                         unsigned long long to, unsigned int flags, void *ctx) {
   Flow *matched_flow = static_cast<Flow *>(ctx);
-  uint64_t rule_id = (matched_flow->rule).id;
 
-  if (id == rule_id) {
-    //only log match if the regex id corresponds to the correct rule id
-    logRuleMatch(matched_flow);
-  }
+  // auto it = ids_rules.find(id);
+
+  // if (it != ids_rules.end()) {
+  //   //only log match if the regex id corresponds to the correct rule id
+  //   logRuleMatch(matched_flow, it->second);
+  // }
+
+  logRuleMatch();
  
   return 0;
 }
 
-CommandResponse UrlFilter::Init(const bess::pb::IDSArg &arg)
+// const bess::pb::IDSArg &arg
+
+CommandResponse UrlFilter::Init(const bess::pb::EmptyArg &)
 {
     /* Store IDS rules and extracts keywords and regex */
-    std::vector<std::string> keywords;
-    std::vector<const char *> patterns;
-    std::vector<unsigned int> rule_ids;
+    // std::vector<std::string> keywords;
+    std::vector<const char *> patterns{"dog"};
+    std::vector<unsigned int> rule_ids{0};
 
-    for (const auto &rule : arg.rules()) {
-      IDSRule new_rule = {
-          .src_ip = Ipv4Prefix(rule.src_ip()),
-          .dst_ip = Ipv4Prefix(rule.dst_ip()),
-          .src_port = be16_t(static_cast<uint16_t>(rule.src_port())),
-          .dst_port = be16_t(static_cast<uint16_t>(rule.dst_port())),
-        };
+    IDSRule new_rule = {
+      .src_ip = Ipv4Prefix("10.0.0.1"),
+      .dst_ip = Ipv4Prefix("10.0.0.2"),
+      .src_port = be16_t(static_cast<uint16_t>(8080)),
+      .dst_port = be16_t(static_cast<uint16_t>(8081))
+    };
 
-        rule_ids.push_back(rule.id())
+    // for (const auto &rule : arg.rules()) {
+    //   IDSRule new_rule = {
+    //       .src_ip = Ipv4Prefix(rule.src_ip()),
+    //       .dst_ip = Ipv4Prefix(rule.dst_ip()),
+    //       .src_port = be16_t(static_cast<uint16_t>(rule.src_port())),
+    //       .dst_port = be16_t(static_cast<uint16_t>(rule.dst_port())),
+    //     };
 
-        auto content = rule.content_rule();
-        patterns.push_back(content.regex());
+    //     rule_ids.push_back(rule.id())
 
-        for (const auto &keyword : content.keywords()) {
-          keywords.push_back(keyword);
-        }
+    //     auto content = rule.content_rule();
+    //     patterns.push_back(content.regex());
 
-      rules_.push_back(new_rule);
-    }
+    //     for (const auto &keyword : content.keywords()) {
+    //       keywords.push_back(keyword);
+    //     }
+
+    //   rules_.push_back(new_rule);
+    // }
 
     /* Aho-Corasick Initalization 
       Eventually this should take keywords associated with regex that are specified by the user
     */
-    keyword_length = keywords.size();
-    buildMatchingMachine(keywords.data(), keyword_length);
+    // keyword_length = keywords.size();
+    // buildMatchingMachine(keywords.data(), keyword_length);
 
     /* Hyperscan Initalization 
       Eventually this should take regex patterns specified by the user in the .bess configuration file
@@ -240,16 +256,16 @@ void UrlFilter::ProcessBatch(Context *ctx, bess::PacketBatch *batch) {
       unsigned int buffer_length = strlen(buffer_data);
 
       // perform fast keyword scan, results will contain IDs if keywords were found in the payload
-      std::vector<int> results = searchKeywords(keyword_length, buffer_data);
+      // std::vector<int> results = searchKeywords(keyword_length, buffer_data);
 
       // perform full scan if any keyword is matched during the fast scan
-      if (!results.empty()) {
+      // if (!results.empty()) {
         if (hs_scan(database, buffer_data, buffer_length, 0, scratch, fullScanHandler, static_cast<void *>(&flow)) != HS_SUCCESS) {
             hs_free_scratch(scratch);
             hs_free_database(database);
             std::cout << "scan failed" << std::endl;
         }
-      }
+      // }
 
     }
 
