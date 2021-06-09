@@ -32,9 +32,6 @@
 
 #include <cmath>
 #include <functional>
-#include <iostream>
-#include <stdlib.h>
-#include <cstdlib>
 
 #include "../utils/checksum.h"
 #include "../utils/ether.h"
@@ -131,21 +128,6 @@ inline flow *FlowGen::ScheduleFlow(uint64_t time_ns) {
 
   /* compensate the fraction part by adding [0.0, 1.0) */
   f->packets_left = NewFlowPkts() + rng_.GetReal();
-
-  //std::cout << "packets left: " << f->packets_left << std::endl;
-
-  /* calculate modified packet placement */
-  double proportion = rand() / 1.0 / RAND_MAX;
-
-  // placement can never be on SYN or FIN packet
-  if (proportion == 0 || proportion == 1) {
-    proportion = 0.5; // default to halfway through
-  }
-
-  int scaled_pos = f->packets_left * proportion;
-  f->mp_pos = f->packets_left - scaled_pos;
-  /* end calculation */
-
 
   active_flows_++;
   generated_flows_++;
@@ -297,11 +279,6 @@ CommandResponse FlowGen::ProcessArguments(const bess::pb::FlowGenArg &arg) {
   ip_src_range_ = arg.ip_src_range();
   ip_dst_range_ = arg.ip_dst_range();
 
-  /* 
-    store modified payload argument (this is the data the IDS will be searching for)
-  */
-  modified_payload = arg.modified_payload();
-
   if (arg.port_src_range() > 65535 || arg.port_dst_range() > 65535) {
     return CommandFailure(EINVAL, "portrang must be e <= 65535");
   }
@@ -369,9 +346,6 @@ CommandResponse FlowGen::Init(const bess::pb::FlowGenArg &arg) {
   CommandResponse err;
 
   rng_.SetSeed(0xBAADF00DDEADBEEFul);
-
-  /* Seed random number generator */
-  srand(time(NULL));
 
   /* set default parameters */
   total_pps_ = 1000.0;
@@ -477,36 +451,6 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
 
   bess::utils::Copy(p, tmpl_, size, true);
 
-  size_t ip_bytes = (ip->header_length) << 2;
-  Tcp *tcp = reinterpret_cast<Tcp *>(reinterpret_cast<char *>(ip) + ip_bytes);
-  tcp->src_port = f->src_port;
-  tcp->dst_port = f->dst_port;
-
-  /* begin payload modification */
-  if (f->mp_pos == f->packets_left) {
-    std::cout << "Modified payload position: " << f->mp_pos << std::endl;
-    std::cout << "Packets left: " << f->mp_pos << std::endl;
-    size_t mp_length = modified_payload.length() + 1;
-    //std::cout << "payload modification triggered" << std::endl;
-
-    // uint32_t room = ip->length.value() - (tcp->offset * 4) - (ip->header_length * 4);
-
-    // // append bytes to packet if modified payload exceeds space available
-    // if (room < mp_length) {
-    //   void *ret = pkt->append(mp_length - room);
-
-    //   if (!ret) {
-    //     std::cout << "failure to modify packet, not enough available memory" << std::endl;
-    //   }
-    // }
-
-    char *payload = NULL;
-    payload = reinterpret_cast<char *>(tcp + 1);
-
-    memcpy(payload, modified_payload.c_str(), mp_length);
-  }
-  /* end modification */
-
   // SYN or FIN?
   if (f->first_pkt || f->packets_left <= 1) {
     pkt->set_total_len(60);  // eth + ip + tcp
@@ -526,6 +470,11 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
 
   ip->src = f->src_ip;
   ip->dst = f->dst_ip;
+
+  size_t ip_bytes = (ip->header_length) << 2;
+  Tcp *tcp = reinterpret_cast<Tcp *>(reinterpret_cast<char *>(ip) + ip_bytes);
+  tcp->src_port = f->src_port;
+  tcp->dst_port = f->dst_port;
 
   tcp->flags = tcp_flags;
   tcp->seq_num = be32_t(f->next_seq_no);

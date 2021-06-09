@@ -32,12 +32,12 @@
 import scapy.all as scapy
 
 eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32')
-ip = scapy.IP(src='192.168.0.1', dst='10.0.0.1')
-tcp = scapy.TCP(sport=10001, dport=80, seq=12345)
-payload = 'The$doggoeshometoday'
+ip = scapy.IP(src='10.0.0.1', dst='10.0.0.2')
+tcp = scapy.TCP(sport=8080, dport=8081, seq=12345)
+payload = 'dog'
 pkt = bytes(eth/ip/tcp/payload)
 
-src::FlowGen(template=pkt, pps=2.2e6, flow_rate=800, flow_duration=5.0, \
+src::FlowGen(template=pkt, pps=1000, flow_rate=10, flow_duration=1.0, \
     arrival='uniform', duration='uniform', quick_rampup=False)
 
 blacklist_rules = [{'host': 'www.%d.com' % i, 'path': '/'} for i in range(100)]

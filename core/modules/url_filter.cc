@@ -36,16 +36,15 @@
 #include <vector>
 
 #include <hs.h>
-#include "aho_corasick_ascii.h"
+// #include "aho_corasick_ascii.h"
 
 #include "../utils/checksum.h"
 #include "../utils/ether.h"
 #include "../utils/format.h"
 #include "../utils/http_parser.h"
 #include "../utils/ip.h"
-#include "../utils/ids_rule.h"
+
 #include "../utils/ids_log.h"
-#include "../utils/flow.h"
 
 using bess::utils::Ethernet;
 using bess::utils::Ipv4;
@@ -66,14 +65,11 @@ static int fullScanHandler(unsigned int id, unsigned long long from,
                         unsigned long long to, unsigned int flags, void *ctx) {
   Flow *matched_flow = static_cast<Flow *>(ctx);
 
-  // auto it = ids_rules.find(id);
+  auto it = ids_rules.find(id);
 
-  // if (it != ids_rules.end()) {
-  //   //only log match if the regex id corresponds to the correct rule id
-  //   logRuleMatch(matched_flow, it->second);
-  // }
-
-  logRuleMatch();
+  if (it != ids_rules.end()) {
+    logRuleMatch(matched_flow, it->second, id);
+  }
  
   return 0;
 }
@@ -87,12 +83,16 @@ CommandResponse UrlFilter::Init(const bess::pb::EmptyArg &)
     std::vector<const char *> patterns{"dog"};
     std::vector<unsigned int> rule_ids{0};
 
+    //initalize src port and dst ports to zero if none are specified
     IDSRule new_rule = {
-      .src_ip = Ipv4Prefix("10.0.0.1"),
-      .dst_ip = Ipv4Prefix("10.0.0.2"),
-      .src_port = be16_t(static_cast<uint16_t>(8080)),
-      .dst_port = be16_t(static_cast<uint16_t>(8081))
+      .src_ip = Ipv4Prefix("10.0.0.1/32"),
+      .dst_ip = Ipv4Prefix("10.0.0.2/32"),
+      .src_port = be16_t(static_cast<uint16_t>(0)),
+      .dst_port = be16_t(static_cast<uint16_t>(0)),
+      .message = "Possible network intrusion detected"
     };
+
+    ids_rules.insert(std::pair<unsigned int, IDSRule>(0, new_rule));
 
     // for (const auto &rule : arg.rules()) {
     //   IDSRule new_rule = {
@@ -204,12 +204,9 @@ void UrlFilter::ProcessBatch(Context *ctx, bess::PacketBatch *batch) {
       // Only create a new flow entry if the flow's headers match an existing IDS rule
       bool flow_matches_rule = false;
       
-      for (const auto &rule : rules_) {
-        if (rule.Match(flow.src_ip, flow.dst_ip, flow.src_port, flow.dst_port)) {
+      for (auto it = ids_rules.begin(); it != ids_rules.end(); it++) {
+        if ((it->second).Match(flow.src_ip, flow.dst_ip, flow.src_port, flow.dst_port)) {
           flow_matches_rule = true;
-
-          //associate flow with an IDS rule by filling out the rule_id field
-          flow.rule = &rule;
         }
       }
 

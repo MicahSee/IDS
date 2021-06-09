@@ -1,3 +1,4 @@
+#include <string>
 #include "../utils/ip.h"
 
 using bess::utils::be16_t;
@@ -15,4 +16,6 @@ struct IDSRule {
     Ipv4Prefix dst_ip;
     be16_t src_port;
     be16_t dst_port;
+
+    std::string message;
 };

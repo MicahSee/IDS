@@ -1,4 +1,8 @@
 // A helper class that defines a TCP flow
+#include "endian.h"
+
+using bess::utils::be16_t;
+using bess::utils::be32_t;
 
 class alignas(16) Flow {
  public:

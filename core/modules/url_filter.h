@@ -49,6 +49,7 @@
 #include "../utils/trie.h"
 #include "../utils/ip.h"
 #include "../utils/flow.h"
+#include "../utils/ids_rule.h"
 
 #include <hs.h>
 
