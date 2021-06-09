@@ -34,14 +34,14 @@ import scapy.all as scapy
 eth = scapy.Ether(src='02:1e:67:9f:4d:ae', dst='06:16:3e:1b:72:32')
 ip = scapy.IP(src='10.0.0.1', dst='10.0.0.2')
 tcp = scapy.TCP(sport=8080, dport=8081, seq=12345)
-payload = 'dog'
+payload = 'doggy'
 pkt = bytes(eth/ip/tcp/payload)
 
 src::FlowGen(template=pkt, pps=1000, flow_rate=10, flow_duration=1.0, \
     arrival='uniform', duration='uniform', quick_rampup=False)
 
 blacklist_rules = [{'host': 'www.%d.com' % i, 'path': '/'} for i in range(100)]
-filter::UrlFilter()
+filter::UrlFilter(rules=[{'src_ip': '10.0.0.1', 'dst_ip': '10.0.0.2', 'src_port': 0, 'dst_port': 0, 'message': 'dog was found in payload', 'regex': 'dog', 'id': 0001}, {'src_ip': '10.0.0.1', 'dst_ip': '10.0.0.2', 'src_port': 0, 'dst_port': 0, 'message': 'doggy was found in payload', 'regex': 'doggy', 'id': 0002}])
 
 src -> 0:filter
 filter:0 -> Sink()

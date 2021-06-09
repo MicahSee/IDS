@@ -109,7 +109,7 @@ class UrlFilter final : public Module {
   static const gate_idx_t kNumIGates = 2;
   static const gate_idx_t kNumOGates = 2;
 
-  CommandResponse Init(const bess::pb::EmptyArg &);
+  CommandResponse Init(const bess::pb::UrlFilterArg &arg);
 
   void ProcessBatch(Context *ctx, bess::PacketBatch *batch) override;
 

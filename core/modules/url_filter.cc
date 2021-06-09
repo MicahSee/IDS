@@ -76,43 +76,38 @@ static int fullScanHandler(unsigned int id, unsigned long long from,
 
 // const bess::pb::IDSArg &arg
 
-CommandResponse UrlFilter::Init(const bess::pb::EmptyArg &)
+CommandResponse UrlFilter::Init(const bess::pb::UrlFilterArg &arg)
 {
     /* Store IDS rules and extracts keywords and regex */
     // std::vector<std::string> keywords;
-    std::vector<const char *> patterns{"dog"};
-    std::vector<unsigned int> rule_ids{0};
+    std::vector<const char *> patterns;
+    std::vector<unsigned int> rule_ids;
 
-    //initalize src port and dst ports to zero if none are specified
-    IDSRule new_rule = {
-      .src_ip = Ipv4Prefix("10.0.0.1/32"),
-      .dst_ip = Ipv4Prefix("10.0.0.2/32"),
-      .src_port = be16_t(static_cast<uint16_t>(0)),
-      .dst_port = be16_t(static_cast<uint16_t>(0)),
-      .message = "Possible network intrusion detected"
-    };
+    for (const auto &rule : arg.rules()) {
+      IDSRule new_rule = {
+          .src_ip = Ipv4Prefix(rule.src_ip()),
+          .dst_ip = Ipv4Prefix(rule.dst_ip()),
+          .src_port = be16_t(static_cast<uint16_t>(rule.src_port())),
+          .dst_port = be16_t(static_cast<uint16_t>(rule.dst_port())),
+          .message = rule.message()
+        };
 
-    ids_rules.insert(std::pair<unsigned int, IDSRule>(0, new_rule));
+      // rule_ids.push_back(rule.id())
 
-    // for (const auto &rule : arg.rules()) {
-    //   IDSRule new_rule = {
-    //       .src_ip = Ipv4Prefix(rule.src_ip()),
-    //       .dst_ip = Ipv4Prefix(rule.dst_ip()),
-    //       .src_port = be16_t(static_cast<uint16_t>(rule.src_port())),
-    //       .dst_port = be16_t(static_cast<uint16_t>(rule.dst_port())),
-    //     };
+      // auto content = rule.content_rule();
+      // patterns.push_back(content.regex());
 
-    //     rule_ids.push_back(rule.id())
+      // for (const auto &keyword : content.keywords()) {
+      //   keywords.push_back(keyword);
+      // }
+      std::string new_regex = rule.regex();
 
-    //     auto content = rule.content_rule();
-    //     patterns.push_back(content.regex());
+      // rules_.push_back(new_rule);
+      patterns.push_back(new_regex.c_str());
+      rule_ids.push_back(rule.id());
 
-    //     for (const auto &keyword : content.keywords()) {
-    //       keywords.push_back(keyword);
-    //     }
-
-    //   rules_.push_back(new_rule);
-    // }
+      ids_rules.insert(std::pair<unsigned int, IDSRule>(rule.id(), new_rule));
+    }
 
     /* Aho-Corasick Initalization 
       Eventually this should take keywords associated with regex that are specified by the user
