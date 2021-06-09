@@ -1103,30 +1103,24 @@ message UpdateArg {
  * clear() command takes an empty argument.
  */
 message UrlFilterArg {
-   /**
-   * One IDS rule is represented by the following tuple.
+  /**
+   * A URL consists of a host and a path.
    */
-  message Rule {
-    string src_ip = 1;    /// Source IP block in CIDR. Wildcard if "".
-    string dst_ip = 2;    /// Destination IP block in CIDR. Wildcard if "".
-    uint32 src_port = 3;  /// TCP/UDP source port. Wildcard if 0.
-    uint32 dst_port = 4;  /// TCP/UDP Destination port. Wildcard if 0.
-    bool established = 5; /// Not implemented
-
-    // Only included if Aho-Corasick scan is being used
-    // message Content {
-        // repeated string keywords = 1;
-        // string regex = 2;
-    // }
-
-    // Content content_rule = 6;
-
-    string message = 6;
-    string regex = 7;
-    uint64 id = 8;
+  message Url {
+    string host = 1;  /// Host field, e.g. "www.google.com"
+    string path = 2;  /// Path prefix, e.g. "/"
   }
+  repeated Url blacklist = 1; /// A list of Urls to block.
+}
 
-  repeated Rule rules = 1; ///A list of ACL rules.
+/**
+ * The runtime configuration of a URLFilter is the current
+ * blacklist.  This means that getting the Arg gets an *empty*
+ * list: we assume anyone using get_initial_arg is also using
+ * get_runtime_config.
+ */
+message UrlFilterConfig {
+  repeated UrlFilterArg.Url blacklist = 1;
 }
 
 /**
