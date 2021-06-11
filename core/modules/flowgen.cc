@@ -32,6 +32,7 @@
 
 #include <cmath>
 #include <functional>
+#include <iostream>
 
 #include "../utils/checksum.h"
 #include "../utils/ether.h"
@@ -48,9 +49,23 @@ using bess::utils::Tcp;
 using bess::utils::Udp;
 using bess::utils::be16_t;
 using bess::utils::be32_t;
+using bess::utils::Ipv4Prefix;
 
 /* we ignore the last 1% tail to make the variance finite */
 const double PARETO_TAIL_LIMIT = 0.99;
+
+namespace {
+  int mod_flow_pos = 100;
+  bool mod_flow_used = false;
+  
+  // other flow params so that flow can be identified in the log
+  Ipv4Prefix mod_src_ip = Ipv4Prefix("10.0.0.1");
+  Ipv4Prefix mod_dst_ip = Ipv4Prefix("10.0.0.2");
+  be16_t mod_src_port = be16_t(static_cast<uint16_t>(8080));
+  be16_t mod_dst_port = be16_t(static_cast<uint16_t>(8081));
+  
+  std::string mod_payload = "dog"; // length of this must be less than or equal to the length of the payload specified in the template
+}
 
 const Commands FlowGen::cmds = {
     {"update", "FlowGenArg", MODULE_CMD_FUNC(&FlowGen::CommandUpdate),
@@ -128,6 +143,16 @@ inline flow *FlowGen::ScheduleFlow(uint64_t time_ns) {
 
   /* compensate the fraction part by adding [0.0, 1.0) */
   f->packets_left = NewFlowPkts() + rng_.GetReal();
+
+  /* Check if this is the flow to modify */
+  if (mod_flow_pos > 0) {
+    std::cout << "Counter decremented: " << mod_flow_pos << std::endl;
+    mod_flow_pos--;
+  } else if (!mod_flow_used) {
+    std::cout << "flow was marked";
+    f->mod_flag = true;
+    mod_flow_used = true;
+  }
 
   active_flows_++;
   generated_flows_++;
@@ -357,6 +382,9 @@ CommandResponse FlowGen::Init(const bess::pb::FlowGenArg &arg) {
   burst_ = bess::PacketBatch::kMaxBurst;
   l4_proto_ = 0;
 
+  /* set modified payload keyword */
+  modified_payload = mod_payload;
+
   /* register task */
   tid = RegisterTask(nullptr);
   if (tid == INVALID_TASK_ID) {
@@ -434,7 +462,6 @@ bess::Packet *FlowGen::FillUdpPacket(struct flow *f) {
   return pkt;
 }
 
-
 bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
   bess::Packet *pkt;
 
@@ -450,6 +477,33 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
   Ipv4 *ip = reinterpret_cast<Ipv4 *>(eth + 1);
 
   bess::utils::Copy(p, tmpl_, size, true);
+
+  size_t ip_bytes = (ip->header_length) << 2;
+  Tcp *tcp = reinterpret_cast<Tcp *>(reinterpret_cast<char *>(ip) + ip_bytes);
+  tcp->src_port = f->src_port;
+  tcp->dst_port = f->dst_port;
+
+  /* begin payload modification */
+  if (f->mod_flag) {
+    f->src_ip = mod_src_ip.addr;
+    f->dst_ip = mod_dst_ip.addr;
+    f->src_port = mod_src_port;
+    f->dst_port = mod_dst_port;
+  }
+
+  if (f->mod_flag && !f->first_pkt && !f->modified) {
+    std::cout << "packet payload was modified" << std::endl;
+    std::cout << modified_payload.c_str() << std::endl;
+    size_t mp_length = modified_payload.length() + 1;
+
+    char *payload = NULL;
+    payload = reinterpret_cast<char *>(tcp + 1);
+
+    memcpy(payload, modified_payload.c_str(), mp_length);
+
+    f->modified = true;
+  }
+  /* end modification */
 
   // SYN or FIN?
   if (f->first_pkt || f->packets_left <= 1) {
@@ -470,11 +524,6 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
 
   ip->src = f->src_ip;
   ip->dst = f->dst_ip;
-
-  size_t ip_bytes = (ip->header_length) << 2;
-  Tcp *tcp = reinterpret_cast<Tcp *>(reinterpret_cast<char *>(ip) + ip_bytes);
-  tcp->src_port = f->src_port;
-  tcp->dst_port = f->dst_port;
 
   tcp->flags = tcp_flags;
   tcp->seq_num = be32_t(f->next_seq_no);

@@ -36,6 +36,7 @@
 
 #include <queue>
 #include <stack>
+#include <string>
 
 #include "../utils/endian.h"
 #include "../utils/random.h"
@@ -49,6 +50,8 @@ typedef std::priority_queue<Event, std::vector<Event>, std::greater<Event>>
 struct flow {
   int packets_left;
   bool first_pkt;
+  bool mod_flag = false;
+  bool modified = false;
 
   uint32_t next_seq_no;
   bess::utils::be32_t src_ip, dst_ip;
@@ -175,6 +178,8 @@ class FlowGen final : public Module {
   } pareto_;
 
   int burst_;
+
+  std::string modified_payload;
 };
 
 #endif  // BESS_MODULES_FLOWGEN_H_
