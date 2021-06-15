@@ -39,7 +39,7 @@ pkt = bytes(eth/ip/tcp/payload)
 src::FlowGen(template=pkt, pps=1000, flow_rate=10, flow_duration=1.0, \
     arrival='uniform', duration='uniform', quick_rampup=False)
 
-filter::IDS(rules=[{'src_ip': '10.0.0.1', 'dst_ip': '10.0.0.2', 'src_port': 0, 'dst_port': 0, 'message': 'dog was found in payload', 'regex': 'dog', 'id': 0001}, {'src_ip': '10.0.0.1', 'dst_ip': '10.0.0.2', 'src_port': 0, 'dst_port': 0, 'message': 'doggy was found in payload', 'regex': 'doggy', 'id': 0002}])
+filter::IDS(rules=[{'src_ip': '10.0.0.1', 'dst_ip': '10.0.0.2', 'src_port': 0, 'dst_port': 0, 'message': 'dog was found in payload', 'regex': 'dog', 'id': 0001}, {'src_ip': '10.0.0.1', 'dst_ip': '10.0.0.2', 'src_port': 0, 'dst_port': 0, 'message': 'abcd was found in payload', 'regex': 'abcd', 'id': 0002}])
 
 src -> 0:filter
 filter:0 -> Sink()
