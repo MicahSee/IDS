@@ -100,10 +100,9 @@ CommandResponse IDS::Init(const bess::pb::IDSArg &arg)
       // for (const auto &keyword : content.keywords()) {
       //   keywords.push_back(keyword);
       // }
-      std::string new_regex = rule.regex();
 
       // rules_.push_back(new_rule);
-      patterns.push_back(new_regex.c_str());
+      patterns.push_back(rule.regex().c_str());
       rule_ids.push_back(rule.id());
 
       ids_rules.insert(std::pair<unsigned int, IDSRule>(rule.id(), new_rule));
