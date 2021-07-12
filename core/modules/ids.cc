@@ -246,6 +246,8 @@ void IDS::ProcessBatch(Context *ctx, bess::PacketBatch *batch) {
       const char *buffer_data = buffer.buf();
       unsigned int buffer_length = strlen(buffer_data);
 
+      std::cout << "Reconstructed payload: " << buffer_data << std::endl;
+
       // perform fast keyword scan, results will contain IDs if keywords were found in the payload
       // std::vector<int> results = searchKeywords(keyword_length, buffer_data);
 
@@ -268,4 +270,3 @@ std::string IDS::GetDesc() const {
 }
 
 ADD_MODULE(IDS, "ids", "Intrusion Detection System")
-

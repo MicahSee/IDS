@@ -564,6 +564,9 @@ message FlowGenArg {
   uint32 ip_dst_range = 9; /// When generating new flows, FlowGen modifies the template packet by changing the IP dst, incrementing it by at most ip_dst_range.
   uint32 port_src_range = 10; /// When generating new flows, FlowGen modifies the template packet by changing the TCP port, incrementing it by at most port_src_range.
   uint32 port_dst_range = 11; /// When generating new flows, FlowGen modifies the template packet by changing the TCP dst port, incrementing it by at most port_dst_range.
+  uint32 normal_payload_size = 12;
+  uint32 modified_payload_size = 13;
+  string modified_payload = 14;
 }
 
 /**

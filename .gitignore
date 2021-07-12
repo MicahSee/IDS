@@ -9,6 +9,7 @@ core/extra.dpdk.mk
 core/kmod/.cache.mk
 *.retry
 *.cache.mk
+*.pcap
 
 # Vagrant stores temporary files in env/.vagrant
 env/.vagrant

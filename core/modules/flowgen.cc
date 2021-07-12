@@ -57,14 +57,16 @@ const double PARETO_TAIL_LIMIT = 0.99;
 namespace {
   int mod_flow_pos = 100;
   bool mod_flow_used = false;
+  int normal_payload_size;
+  int modified_payload_size;
   
   // other flow params so that flow can be identified in the log
-  Ipv4Prefix mod_src_ip = Ipv4Prefix("10.0.0.1");
-  Ipv4Prefix mod_dst_ip = Ipv4Prefix("10.0.0.2");
-  be16_t mod_src_port = be16_t(static_cast<uint16_t>(8080));
-  be16_t mod_dst_port = be16_t(static_cast<uint16_t>(8081));
+  // Ipv4Prefix mod_src_ip = Ipv4Prefix("10.0.0.1");
+  // Ipv4Prefix mod_dst_ip = Ipv4Prefix("10.0.0.2");
+  // be16_t mod_src_port = be16_t(static_cast<uint16_t>(8080));
+  // be16_t mod_dst_port = be16_t(static_cast<uint16_t>(8081));
   
-  std::string mod_payload = "dog"; // length of this must be less than or equal to the length of the payload specified in the template
+  std::string mod_payload; // length of this must be less than or equal to the length of the payload specified in the template
 }
 
 const Commands FlowGen::cmds = {
@@ -134,6 +136,10 @@ inline flow *FlowGen::ScheduleFlow(uint64_t time_ns) {
     flows_free_.pop();
   }
 
+  /* initalize flow with default values */
+  f->mod_flag = false;
+  f->modified = false;
+
   f->first_pkt = true;
   f->next_seq_no = 12345;
   f->src_ip = be32_t(ip_src_base_ + rng_.GetRange(ip_src_range_));
@@ -146,10 +152,8 @@ inline flow *FlowGen::ScheduleFlow(uint64_t time_ns) {
 
   /* Check if this is the flow to modify */
   if (mod_flow_pos > 0) {
-    std::cout << "Counter decremented: " << mod_flow_pos << std::endl;
     mod_flow_pos--;
   } else if (!mod_flow_used) {
-    std::cout << "flow was marked";
     f->mod_flag = true;
     mod_flow_used = true;
   }
@@ -372,6 +376,11 @@ CommandResponse FlowGen::Init(const bess::pb::FlowGenArg &arg) {
 
   rng_.SetSeed(0xBAADF00DDEADBEEFul);
 
+  /* payload modification parameters */
+  normal_payload_size = arg.normal_payload_size();
+  mod_payload = arg.modified_payload();
+  modified_payload_size = arg.modified_payload().length();
+
   /* set default parameters */
   total_pps_ = 1000.0;
   flow_rate_ = 10.0;
@@ -476,6 +485,7 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
   Ethernet *eth = reinterpret_cast<Ethernet *>(p);
   Ipv4 *ip = reinterpret_cast<Ipv4 *>(eth + 1);
 
+  pkt->append(4); //append four bytes to the end of the packet
   bess::utils::Copy(p, tmpl_, size, true);
 
   size_t ip_bytes = (ip->header_length) << 2;
@@ -484,22 +494,31 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
   tcp->dst_port = f->dst_port;
 
   /* begin payload modification */
-  if (f->mod_flag) {
-    f->src_ip = mod_src_ip.addr;
-    f->dst_ip = mod_dst_ip.addr;
-    f->src_port = mod_src_port;
-    f->dst_port = mod_dst_port;
-  }
+  // if (f->mod_flag) {
+  //   std::cout << "marked flow header modified" << std::endl;
+  //   tcp->src_port = mod_src_port;
+  //   tcp->dst_port = mod_dst_port;
+  //   ip->src = mod_src_ip.addr;
+  //   ip->dst = mod_dst_ip.addr;
 
-  if (f->mod_flag && !f->first_pkt && !f->modified) {
-    std::cout << "packet payload was modified" << std::endl;
-    std::cout << modified_payload.c_str() << std::endl;
-    size_t mp_length = modified_payload.length() + 1;
+  //   std::cout << (uint32_t) mod_src_ip.addr << std::endl;
+  // } else {
+  //   tcp->src_port = f->src_port;
+  //   tcp->dst_port = f->dst_port;
+  //   ip->src = f->src_ip;
+  //   ip->dst = f->dst_ip;
+  // }
+
+  if (true) { //modify the payload
+
+    std::string new_payload = "test";
+
+    size_t mp_length = new_payload.length();
 
     char *payload = NULL;
     payload = reinterpret_cast<char *>(tcp + 1);
 
-    memcpy(payload, modified_payload.c_str(), mp_length);
+    memcpy(payload, new_payload.c_str(), mp_length);
 
     f->modified = true;
   }
@@ -512,8 +531,8 @@ bess::Packet *FlowGen::FillTcpPacket(struct flow *f) {
     ip->length = be16_t(40);
   } else {
     pkt->set_data_off(SNBUF_HEADROOM);
-    pkt->set_total_len(size);
-    pkt->set_data_len(size);
+    pkt->set_total_len(size + 4);
+    pkt->set_data_len(size + 4);
   }
 
   uint8_t tcp_flags = f->first_pkt ? /* SYN */ 0x02 : /* ACK */ 0x10;
